@@ -37,6 +37,32 @@ define(function (require, exports, module) {
     var CodeGenUtils = require("CodeGenUtils");
     
     /**
+     * Constants for write function types
+     */
+    var WRITE_FUNCTIONS = {
+        ANNOTATION_TYPE: "writeAnnotationType",
+        CLASS: "writeClass",
+        INTERFACE: "writeInterface",
+        ENUM: "writeEnum"
+    };
+    
+    /**
+     * Constants for attribute suffix handling
+     */
+    var ATTRIBUTE_SUFFIX = "Attribute";
+    var ATTRIBUTE_SUFFIX_LENGTH = 9;
+    
+    /**
+     * Standard C# using statements
+     */
+    var STANDARD_USINGS = [
+        "using System;",
+        "using System.Collections.Generic;",
+        "using System.Linq;",
+        "using System.Text;"
+    ];
+    
+    /**
      * C# Code Generator
      * @constructor
      *
@@ -71,6 +97,19 @@ define(function (require, exports, module) {
     };
     
     /**
+     * Write standard C# using statements
+     * @param {CodeWriter} codeWriter
+     */
+    CsharpCodeGenerator.prototype.writeUsings = function (codeWriter) {
+        var i, len;
+        codeWriter.writeLine();
+        for (i = 0, len = STANDARD_USINGS.length; i < len; i++) {
+            codeWriter.writeLine(STANDARD_USINGS[i]);
+        }
+        codeWriter.writeLine();
+    };
+    
+    /**
      * Generate codes from a given element
      * @param {type.Model} elem
      * @param {string} path
@@ -94,7 +133,6 @@ define(function (require, exports, module) {
                     Async.doSequentially(
                         elem.ownedElements,
                         function (child) {
-                            console.log('package generate');
                             return self.generate(child, fullPath, options);
                         },
                         false
@@ -111,44 +149,29 @@ define(function (require, exports, module) {
             
             // AnnotationType
             if (isAnnotationType) {
-                console.log('annotationType generate');
-                
-                console.log(elem.name.substring(elem.name.length-9, elem.name.length)); 
-        
-                if(elem.name.length<9 ){  
-                    elem.name = elem.name + "Attribute";
-                }
-                else if ( elem.name.substring(elem.name.length-9, elem.name.length) != "Attribute" ){   
-                    elem.name = elem.name + "Attribute";
+                // Ensure annotation type name ends with "Attribute"
+                if (elem.name.length < ATTRIBUTE_SUFFIX_LENGTH) {  
+                    elem.name = elem.name + ATTRIBUTE_SUFFIX;
+                } else if (elem.name.substring(elem.name.length - ATTRIBUTE_SUFFIX_LENGTH, elem.name.length) !== ATTRIBUTE_SUFFIX) {   
+                    elem.name = elem.name + ATTRIBUTE_SUFFIX;
                 }
                 
                 fullPath = path + "/" + elem.name + ".cs";
                 codeWriter = new CodeGenUtils.CodeWriter(this.getIndentString(options)); 
-                codeWriter.writeLine();
-                codeWriter.writeLine("using System;");
-                codeWriter.writeLine("using System.Collections.Generic;");
-                codeWriter.writeLine("using System.Linq;");
-                codeWriter.writeLine("using System.Text;");
-                codeWriter.writeLine();
+                this.writeUsings(codeWriter);
 //                this.writeAnnotationType(codeWriter, elem, options, isAnnotationType);
-                this.writeNamespace("writeAnnotationType", codeWriter, elem, options, isAnnotationType);
+                this.writeNamespace(WRITE_FUNCTIONS.ANNOTATION_TYPE, codeWriter, elem, options, isAnnotationType);
                 file = FileSystem.getFileForPath(fullPath);
                 FileUtils.writeText(file, codeWriter.getData(), true).then(result.resolve, result.reject);
             } 
             // Class
             else { 
                 fullPath = path + "/" + elem.name + ".cs"; 
-                console.log('Class generate' + fullPath);
                 
                 codeWriter = new CodeGenUtils.CodeWriter(this.getIndentString(options)); 
-                codeWriter.writeLine();
-                codeWriter.writeLine("using System;");
-                codeWriter.writeLine("using System.Collections.Generic;");
-                codeWriter.writeLine("using System.Linq;");
-                codeWriter.writeLine("using System.Text;");
-                codeWriter.writeLine();
+                this.writeUsings(codeWriter);
 //                this.writeClass(codeWriter, elem, options, isAnnotationType);
-                this.writeNamespace("writeClass", codeWriter, elem, options, isAnnotationType);
+                this.writeNamespace(WRITE_FUNCTIONS.CLASS, codeWriter, elem, options, isAnnotationType);
                 file = FileSystem.getFileForPath(fullPath);
                 FileUtils.writeText(file, codeWriter.getData(), true).then(result.resolve, result.reject);
             }
@@ -156,17 +179,11 @@ define(function (require, exports, module) {
         // Interface
         else if (elem instanceof type.UMLInterface) {
             fullPath = path + "/" + elem.name + ".cs";
-            console.log('Interface generate' + fullPath);
             
             codeWriter = new CodeGenUtils.CodeWriter(this.getIndentString(options)); 
-            codeWriter.writeLine();
-            codeWriter.writeLine("using System;");
-            codeWriter.writeLine("using System.Collections.Generic;");
-            codeWriter.writeLine("using System.Linq;");
-            codeWriter.writeLine("using System.Text;");
-            codeWriter.writeLine();
+            this.writeUsings(codeWriter);
 //            this.writeInterface(codeWriter, elem, options);
-            this.writeNamespace("writeInterface", codeWriter, elem, options, isAnnotationType);
+            this.writeNamespace(WRITE_FUNCTIONS.INTERFACE, codeWriter, elem, options, isAnnotationType);
             file = FileSystem.getFileForPath(fullPath);
             FileUtils.writeText(file, codeWriter.getData(), true).then(result.resolve, result.reject);
             
@@ -175,16 +192,15 @@ define(function (require, exports, module) {
         else if (elem instanceof type.UMLEnumeration) {
             fullPath = path + "/" + elem.name + ".cs";
             codeWriter = new CodeGenUtils.CodeWriter(this.getIndentString(options)); 
-            codeWriter.writeLine();
+            this.writeUsings(codeWriter);
 //            this.writeEnum(codeWriter, elem, options);
-            this.writeNamespace("writeEnum", codeWriter, elem, options, isAnnotationType);
+            this.writeNamespace(WRITE_FUNCTIONS.ENUM, codeWriter, elem, options, isAnnotationType);
             file = FileSystem.getFileForPath(fullPath);
             FileUtils.writeText(file, codeWriter.getData(), true).then(result.resolve, result.reject);
              
         }     
         // Others (Nothing generated.)
         else {
-            console.log('nothing generate');
             result.resolve();
         }
         return result.promise();
@@ -206,16 +222,13 @@ define(function (require, exports, module) {
             codeWriter.writeLine("namespace " + path + "{"); 
             codeWriter.indent();
         }
-        if(writeFunction == "writeAnnotationType"){
+        if (writeFunction === WRITE_FUNCTIONS.ANNOTATION_TYPE) {
             this.writeAnnotationType(codeWriter, elem, options);
-        }
-        else if (writeFunction == "writeClass"){
+        } else if (writeFunction === WRITE_FUNCTIONS.CLASS) {
             this.writeClass(codeWriter, elem, options);
-        }
-        else if (writeFunction == "writeInterface"){
+        } else if (writeFunction === WRITE_FUNCTIONS.INTERFACE) {
             this.writeInterface(codeWriter, elem, options);
-        }
-        else if (writeFunction == "writeEnum"){ 
+        } else if (writeFunction === WRITE_FUNCTIONS.ENUM) { 
             this.writeEnum(codeWriter, elem, options);
         }
         
@@ -419,18 +432,15 @@ define(function (require, exports, module) {
             return (rel instanceof type.UMLAssociation);
         }); 
         
-        console.log('association length: ' + associations.length); 
         
         for (i = 0, len = associations.length; i < len; i++) {
             var asso = associations[i];
             if (asso.end1.reference === elem && asso.end2.navigable === true) {
                 this.writeMemberVariable(codeWriter, asso.end2, options);
                 codeWriter.writeLine();
-                console.log('assoc end1');
             } else if (asso.end2.reference === elem && asso.end1.navigable === true) {
                 this.writeMemberVariable(codeWriter, asso.end1, options);
                 codeWriter.writeLine();
-                console.log('assoc end2');
             }
         } 
         
@@ -447,7 +457,6 @@ define(function (require, exports, module) {
                 if (def.stereotype === "annotationType") {
                     this.writeAnnotationType(codeWriter, def, options);
                 } else {
-                    console.log("class in class");
                     this.writeClass(codeWriter, def, options);
                 }
                 codeWriter.writeLine();
@@ -533,18 +542,15 @@ define(function (require, exports, module) {
             return (rel instanceof type.UMLAssociation);
         }); 
         
-        console.log('association length: ' + associations.length); 
         
         for (i = 0, len = associations.length; i < len; i++) {
             var asso = associations[i];
             if (asso.end1.reference === elem && asso.end2.navigable === true) {
                 this.writeMemberVariable(codeWriter, asso.end2, options);
                 codeWriter.writeLine();
-                console.log('assoc end1');
             } else if (asso.end2.reference === elem && asso.end1.navigable === true) {
                 this.writeMemberVariable(codeWriter, asso.end1, options);
                 codeWriter.writeLine();
-                console.log('assoc end2');
             }
         } 
         
@@ -561,7 +567,6 @@ define(function (require, exports, module) {
                 if (def.stereotype === "annotationType") {
                     this.writeAnnotationType(codeWriter, def, options);
                 } else {
-                    console.log("class in class");
                     this.writeClass(codeWriter, def, options);
                 }
                 codeWriter.writeLine();
@@ -646,7 +651,7 @@ define(function (require, exports, module) {
                 if (returnParam) {
                     var returnType = this.getType(returnParam);
                     if (returnType === "bool") {
-                        codeWriter.writeLine("return False;");
+                        codeWriter.writeLine("return false;");
                     } else if (returnType === "byte" 
                                || returnType === "int" 
                                || returnType === "sbyte" 
@@ -777,13 +782,20 @@ define(function (require, exports, module) {
         
         var i, len, lines;
         if (options.csharpDoc && _.isString(text)) {
-            console.log("write Doc");
             lines = text.trim().split("\n");
-            codeWriter.writeLine("/**");
-            for (i = 0, len = lines.length; i < len; i++) {
-                codeWriter.writeLine(" * " + lines[i]);
+            if (lines.length === 1) {
+                // Single line summary
+                codeWriter.writeLine("/// <summary>");
+                codeWriter.writeLine("/// " + lines[0]);
+                codeWriter.writeLine("/// </summary>");
+            } else {
+                // Multi-line documentation
+                codeWriter.writeLine("/// <summary>");
+                for (i = 0, len = lines.length; i < len; i++) {
+                    codeWriter.writeLine("/// " + lines[i]);
+                }
+                codeWriter.writeLine("/// </summary>");
             }
-            codeWriter.writeLine(" */");
         }
     };
 
